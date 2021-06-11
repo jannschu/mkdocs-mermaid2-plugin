@@ -12,15 +12,38 @@ from . import pyjs
 from .util import info, libname, url_exists
 
 
+try:
+    BeautifulSoup("", "lxml")
+    HTML_PARSER = "lxml"
+except:
+    HTML_PARSER = "html.parser"
+
+
 # ------------------------
 # Constants and utilities
 # ------------------------
 # the default (recommended) mermaid lib
-MERMAID_LIB_VERSION = '8.8.0'
+MERMAID_LIB_VERSION = '8.10.2'
 MERMAID_LIB = "https://unpkg.com/mermaid@%s/dist/mermaid.min.js"
 # Two conditions for activating custom fences:
 SUPERFENCES_EXTENSION = 'pymdownx.superfences'
-CUSTOM_FENCE_FN = 'fence_mermaid_custom' 
+CUSTOM_FENCE_FN = 'fence_mermaid_custom'
+FONT_FAMILY = '^getComputedStyle(document.body)["font-family"]'
+DEFAULT_ARGUMENTS = {
+    "startOnLoad": True,
+    "theme": "default",
+    "themeVariables": {
+        "fontFamily": FONT_FAMILY,
+    },
+    "sequence": {
+        "actorFontFamily": FONT_FAMILY,
+        "noteFontFamily": FONT_FAMILY,
+        "messageFontFamily": FONT_FAMILY,
+    },
+    "journey": {
+        "taskFontFamily": FONT_FAMILY,
+    }
+}
 
 # ------------------------
 # Plugin
@@ -32,7 +55,7 @@ class MarkdownMermaidPlugin(BasePlugin):
     config_scheme = (
 
         ('version', PluginType(str, default=MERMAID_LIB_VERSION)),
-        ('arguments', PluginType(dict, default={})),
+        ('arguments', PluginType(dict, default=DEFAULT_ARGUMENTS)),
         # ('custom_loader', PluginType(bool, default=False))
     )
 
@@ -123,6 +146,14 @@ class MarkdownMermaidPlugin(BasePlugin):
                     
             return self._activate_custom_loader
 
+    @property
+    def material_instant_navigation(self):
+        theme = self._full_config.get('theme')
+        try:
+            return theme.name == 'material' and 'navigation.instant' in theme['features']
+        except KeyError:
+            return False
+
     # ------------------------
     # Event handlers
     # ------------------------
@@ -153,7 +184,7 @@ class MarkdownMermaidPlugin(BasePlugin):
         Actions for each page:
         generate the HTML code for all code items marked as 'mermaid'
         """
-        soup = BeautifulSoup(output_content, 'html.parser')
+        soup = BeautifulSoup(output_content, HTML_PARSER)
         page_name = page.title
         # first, determine if the page has diagrams:
         if self.activate_custom_loader:
@@ -186,6 +217,7 @@ class MarkdownMermaidPlugin(BasePlugin):
         if mermaids:
             info("Page '%s': found %s diagrams, adding scripts" % 
                     (page_name, mermaids))
+        if mermaids or self.material_instant_navigation:
             if not self.extra_mermaid_lib:
                 # if no extra library mentioned specify it
                 new_tag = soup.new_tag("script", src=self.mermaid_lib)
@@ -201,6 +233,13 @@ class MarkdownMermaidPlugin(BasePlugin):
                 new_tag.string = "window.mermaidConfig = {default: %s}" % js_args
             else:
                 js_args =  pyjs.dumps(self.mermaid_args) 
-                new_tag.string="mermaid.initialize(%s);" % js_args
+                js = 'mermaid.initialize(%s);'
+                new_tag.string = js % js_args
+
             soup.body.append(new_tag)
+        if self.material_instant_navigation:
+            reload_tag = soup.new_tag("script")
+            reload_tag.string = "if (window.mermaid !== undefined) mermaid.init()"
+            container = soup.select('[data-md-component="container"]')[0]
+            container.append(reload_tag)
         return str(soup)

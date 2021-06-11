@@ -53,7 +53,7 @@ def dumps(obj:Any,
             r = obj[1:]
         else:
             # normal string
-            r =  '"%s"' % obj
+            r =  '"%s"' % obj.replace('"', '\\"')
         return r
     elif isinstance(obj, dict):
         l = []
