@@ -97,12 +97,14 @@ class MarkdownMermaidPlugin(BasePlugin):
         """
         Provides the actual mermaid library used
         """
-        mermaid_version = self.config['version']
-        lib = self.extra_mermaid_lib or MERMAID_LIB % mermaid_version 
-        if not url_exists(lib):
-            raise FileNotFoundError("Cannot find Mermaid library: %s" %
-                                    lib)
-        return lib
+        if not hasattr(self, '_mermaid_lib'):
+            mermaid_version = self.config['version']
+            lib = self.extra_mermaid_lib or MERMAID_LIB % mermaid_version 
+            if not url_exists(lib):
+                raise FileNotFoundError("Cannot find Mermaid library: %s" %
+                                        lib)
+            self._mermaid_lib = lib
+        return self._mermaid_lib
 
 
     @property
@@ -222,7 +224,6 @@ class MarkdownMermaidPlugin(BasePlugin):
                 # if no extra library mentioned specify it
                 new_tag = soup.new_tag("script", src=self.mermaid_lib)
                 soup.body.append(new_tag)
-                # info(new_tag)
             new_tag = soup.new_tag("script")
             # initialization command
             if self.activate_custom_loader:
